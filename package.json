@@ -1,0 +1,29 @@
+{
+  "name": "docker-tui",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "bun run ./src/index.tsx",
+    "dev": "bun --hot run ./src/index.tsx"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/dockerode": "^4.0.1",
+    "@types/ink-big-text": "^1.2.4",
+    "@types/ink-gradient": "^2.0.4",
+    "@types/react": "^19.2.13"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "dockerode": "^4.0.9",
+    "ink": "^6.6.0",
+    "ink-big-text": "^2.0.0",
+    "ink-gradient": "^4.0.0",
+    "ink-spinner": "^5.0.0",
+    "ink-table": "^3.1.0",
+    "react": "^19.2.4"
+  }
+}
