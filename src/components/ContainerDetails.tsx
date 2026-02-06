@@ -1,10 +1,12 @@
 import React, { useMemo } from "react";
 import { Box, Text, useInput } from "ink";
 import { useDockerStats, type ContainerStats } from "../hooks/useDockerStats";
+import { useContainerActions } from "../hooks/useContainerActions";
 
 interface ContainerDetailsProps {
   containerId: string;
   onBack: () => void;
+  onViewLogs: (containerId: string) => void;
 }
 
 function calculateCpuPercent(stats: ContainerStats) {
@@ -39,12 +41,33 @@ function formatBytes(bytes: number, decimals = 2) {
 const ContainerDetails: React.FC<ContainerDetailsProps> = ({
   containerId,
   onBack,
+  onViewLogs,
 }) => {
   const stats = useDockerStats(containerId);
+  const {
+    startContainer,
+    stopContainer,
+    restartContainer,
+    isLoading,
+    actionMessage,
+    actionError,
+  } = useContainerActions(containerId);
 
   useInput((input, key) => {
     if (key.escape || key.backspace || input === "q") {
       onBack();
+    }
+    if (input === "s") {
+      startContainer();
+    }
+    if (input === "x") {
+      stopContainer();
+    }
+    if (input === "r") {
+      restartContainer();
+    }
+    if (input === "l") {
+      onViewLogs(containerId);
     }
   });
 
@@ -104,7 +127,23 @@ const ContainerDetails: React.FC<ContainerDetailsProps> = ({
         </Text>
       </Box>
 
-      <Box marginTop={2}>
+      <Box marginTop={1} padding={1} borderStyle="single" borderColor="gray">
+        {isLoading ? (
+          <Text color="yellow">Executing action...</Text>
+        ) : (
+          <>
+            {actionMessage && <Text color="green">{actionMessage}</Text>}
+            {actionError && <Text color="red">{actionError}</Text>}
+            {!actionMessage && !actionError && (
+              <Text color="white">
+                Actions: [S]tart | [X]Stop | [R]estart | [L]ogs
+              </Text>
+            )}
+          </>
+        )}
+      </Box>
+
+      <Box marginTop={1}>
         <Text color="gray">(Press 'q' or 'Esc' to go back)</Text>
       </Box>
     </Box>

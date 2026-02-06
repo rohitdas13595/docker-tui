@@ -11,10 +11,13 @@ A stunning, modern Terminal User Interface for monitoring and managing Docker co
 
 - **Visual Appeal**: Beautiful gradients and big text headers using `ink-gradient` and `ink-big-text`.
 - **Live Monitoring**: Real-time streaming of CPU, Memory, and Network I/O using Docker streams.
+- **Container Control**: Start, Stop, and Restart containers directly from the UI.
+- **Live Logs**: View real-time log streams for any container.
 - **Keyboard Navigation**: Intuitive Up/Down arrow navigation and Vim-style keys support.
 - **Smart Pagination**: Automatically paginates long lists of containers (10 per page), preventing terminal scroll jumping.
 - **Instant Feedback**: Live status indicators (Running/Exited) with color-coded feedback.
 - **Performance**: Built on Bun for ultra-fast startup and execution.
+- **Portable**: Single-file executables for Linux, Windows, and macOS.
 
 ---
 
@@ -22,7 +25,7 @@ A stunning, modern Terminal User Interface for monitoring and managing Docker co
 
 ### Component Map
 
-This high-level overview illustrates how the application state flows from the Docker socket into the React components.
+This high-level overview illustrates how the application state flows from the Docker socket into the React components, including the new Actions and Logs modules.
 
 ```mermaid
 graph TD
@@ -31,41 +34,44 @@ graph TD
         Header[Header Component]
         List[ContainerList Component]
         Details[ContainerDetails Component]
-        Pagination[Pagination Logic]
+        Logs[ContainerLogs Component]
     end
 
     subgraph Logic_Layer [State & Logic Layer]
-        useContainers[useDockerContainers Hook]
-        useStats[useDockerStats Hook]
-        Parser[Data Parsers & Formatters]
+        useContainers[useDockerContainers]
+        useStats[useDockerStats]
+        useActions[useContainerActions]
+        useLogs[useDockerLogs]
     end
 
     subgraph System_Layer [Infrastructure Layer]
         DockerAPI[Docker Socket / API]
-        BunRuntime[Bun Runtime]
     end
 
     %% Connections
     App --> Header
-    App -->|Switch View| List
-    App -->|Switch View| Details
+    App -->|View: List| List
+    App -->|View: Details| Details
+    App -->|View: Logs| Logs
 
-    List --> Pagination
     List --> useContainers
     Details --> useStats
-    Details --> Parser
+    Details --> useActions
+    Logs --> useLogs
 
-    useContainers -.->|Poll Interval: 2s| DockerAPI
-    useStats -.->|Live Stream| DockerAPI
+    useContainers -.->|Poll| DockerAPI
+    useStats -.->|Stream| DockerAPI
+    useActions -.->|POST| DockerAPI
+    useLogs -.->|Stream| DockerAPI
 
-    style UI_Layer fill:#eef,stroke:#333,stroke-width:2px
-    style Logic_Layer fill:#efe,stroke:#333,stroke-width:2px
-    style System_Layer fill:#fee,stroke:#333,stroke-width:2px
+    style UI_Layer fill:#eef,stroke:#333
+    style Logic_Layer fill:#efe,stroke:#333
+    style System_Layer fill:#fee,stroke:#333
 ```
 
 ### User Interaction Flow
 
-The following state diagram details the user experience and navigation paths.
+The following state diagram details the user experience and navigation paths, including the new Logs view.
 
 ```mermaid
 stateDiagram-v2
@@ -74,61 +80,46 @@ stateDiagram-v2
 
     state Dashboard_View {
         [*] --> ListDisplay
-        ListDisplay --> ListDisplay : Up/Down Arrow (Nav)
-        ListDisplay --> ListDisplay : Auto-Refresh (Background)
-        ListDisplay --> ListDisplay : Page Change (Auto)
+        ListDisplay --> ListDisplay : Up/Down Nav
     }
 
-    FetchingData --> Dashboard_View : Success
-    FetchingData --> ErrorState : Socket Error
+    FetchingData --> Dashboard_View
 
     Dashboard_View --> Container_Detail_View : Enter Key
 
     state Container_Detail_View {
         [*] --> ConnectingStream
-        ConnectingStream --> StreamingStats : Connected
-        StreamingStats --> StreamingStats : Update UI (Real-time)
+        ConnectingStream --> StreamingStats
+        StreamingStats --> StreamingStats : Live Updates
+
+        state Actions {
+            [*] --> Idle
+            Idle --> Executing : s/x/r Key
+            Executing --> Idle : Success/Error
+        }
     }
 
-    Container_Detail_View --> Dashboard_View : Esc / q / Backspace
-```
+    Container_Detail_View --> Log_View : 'l' Key
+    Log_View --> Container_Detail_View : Esc / q
 
-### Data Refresh Cycle
-
-How the application keeps data fresh without overwhelming the system.
-
-```mermaid
-sequenceDiagram
-    participant UI as ContainerList UI
-    participant Hook as useDockerContainers
-    participant Docker as Docker Daemon
-
-    UI->>Hook: Mount
-    Hook->>Docker: listContainers()
-    Docker-->>Hook: [Container A, Container B...]
-    Hook-->>UI: Update State (Loading -> Ready)
-
-    loop Every 2 Seconds
-        Hook->>Docker: listContainers()
-        Docker-->>Hook: [Container A, Container B...]
-        Hook-->>UI: SetContainers(updated_list)
-        Note right of UI: React Re-renders only changed items
-    end
+    Container_Detail_View --> Dashboard_View : Esc / q
 ```
 
 ---
 
 ## 🎮 Key Bindings
 
-| Key                | Context     | Action                             |
-| :----------------- | :---------- | :--------------------------------- |
-| `↑` / `Up Arrow`   | List View   | Move selection up                  |
-| `↓` / `Down Arrow` | List View   | Move selection down                |
-| `Enter` / `Return` | List View   | View details of selected container |
-| `Esc`              | Detail View | Return to List View                |
-| `q`                | Detail View | Return to List View                |
-| `Backspace`        | Detail View | Return to List View                |
-| `Ctrl+C`           | Global      | Exit Application                   |
+| Key                       | Context         | Action                             |
+| :------------------------ | :-------------- | :--------------------------------- |
+| `↑` / `Up Arrow`          | List View       | Move selection up                  |
+| `↓` / `Down Arrow`        | List View       | Move selection down                |
+| `Enter` / `Return`        | List View       | View details of selected container |
+| `Esc` / `q` / `Backspace` | Detail/Log View | Go Back / Return to List View      |
+| `s`                       | Detail View     | **Start** Container                |
+| `x`                       | Detail View     | **Stop** Container                 |
+| `r`                       | Detail View     | **Restart** Container              |
+| `l`                       | Detail View     | View **Logs**                      |
+| `Ctrl+C`                  | Global          | Exit Application                   |
 
 ---
 
@@ -136,16 +127,20 @@ sequenceDiagram
 
 ```bash
 docker-tui/
+├── bin/                 # Compiled executables
 ├── src/
 │   ├── components/
-│   │   ├── Header.tsx          # App logo and title
-│   │   ├── ContainerList.tsx   # Paginated list of containers
-│   │   └── ContainerDetails.tsx # Live stats view
+│   │   ├── Header.tsx           # App logo and title
+│   │   ├── ContainerList.tsx    # Paginated list of containers
+│   │   ├── ContainerDetails.tsx # Live stats view + Actions
+│   │   └── ContainerLogs.tsx    # Log streaming view
 │   ├── hooks/
 │   │   ├── useDockerContainers.ts # Polling logic for container list
-│   │   └── useDockerStats.ts      # Streaming logic for stats
-│   ├── index.tsx               # Entry point
-│   └── App.tsx                 # Main layout & router
+│   │   ├── useDockerStats.ts      # Streaming logic for stats
+│   │   ├── useContainerActions.ts # Start/Stop/Restart logic
+│   │   └── useDockerLogs.ts       # Log streaming logic
+│   ├── index.tsx                # Entry point
+│   └── App.tsx                  # Main layout & router
 ├── package.json
 ├── tsconfig.json
 └── README.md
@@ -153,7 +148,31 @@ docker-tui/
 
 ---
 
-## 🚀 Getting Started
+## 📦 Building Executables
+
+You can build standalone executables for Linux, Windows, and macOS (Apple Silicon). These binaries do not require Bun or Node.js installed on the target machine.
+
+### Build Commands
+
+```bash
+# Build for Linux (output: bin/docker-tui-linux)
+bun run build
+
+# Build for Windows (output: bin/docker-tui-windows.exe)
+bun run build:win
+
+# Build for macOS Apple Silicon (output: bin/docker-tui-macos-arm64)
+bun run build:mac
+
+# Build ALL targets at once
+bun run build:all
+```
+
+The compiled binaries will be available in the `bin/` directory.
+
+---
+
+## 🚀 Getting Started (Development)
 
 ### Prerequisites
 
@@ -197,9 +216,9 @@ bun run dev
 **Fix:**
 
 1.  Ensure Docker is running (`systemctl status docker` or Check Docker Desktop).
-2.  You might need `sudo` permissions:
+2.  You might need `sudo` permissions, even for the binary:
     ```bash
-    sudo bun start
+    sudo ./bin/docker-tui-linux
     ```
 3.  Or add your user to the docker group (recommended):
     ```bash
@@ -207,21 +226,15 @@ bun run dev
     # Log out and log back in for this to take effect
     ```
 
-### "Permission denied"
-
-**Cause:** Your user does not have read/write access to the docker socket.
-**Fix:** Follow step 3 above to add your user to the `docker` group.
-
 ---
 
 ## 🔮 Future Roadmap
 
-- [ ] **Container Actions**: Start, stop, and restart containers directly from the UI.
-- [ ] **Log Viewing**: Stream logs for a specific container in a separate view.
 - [ ] **Image Management**: List, pull, and delete Docker images.
 - [ ] **Volume Inspector**: View volume mounting details.
 - [ ] **Dark/Light Mode**: Toggle color themes.
+- [ ] **Search/Filter**: Filter containers by name.
 
 ---
 
-Built with ❤️ by [Your Name] using **Bun**.
+Built with ❤️ by **Rohit** using **Bun**.

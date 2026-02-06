@@ -5,14 +5,19 @@
   "private": true,
   "scripts": {
     "start": "bun run ./src/index.tsx",
-    "dev": "bun --hot run ./src/index.tsx"
+    "dev": "bun --hot run ./src/index.tsx",
+    "build": "bun build --compile --target=bun-linux-x64 ./src/index.tsx --outfile bin/docker-tui-linux",
+    "build:win": "bun build --compile --target=bun-windows-x64 ./src/index.tsx --outfile bin/docker-tui-windows.exe",
+    "build:mac": "bun build --compile --target=bun-darwin-arm64 ./src/index.tsx --outfile bin/docker-tui-macos-arm64",
+    "build:all": "bun run build && bun run build:win && bun run build:mac"
   },
   "devDependencies": {
     "@types/bun": "latest",
     "@types/dockerode": "^4.0.1",
     "@types/ink-big-text": "^1.2.4",
     "@types/ink-gradient": "^2.0.4",
-    "@types/react": "^19.2.13"
+    "@types/react": "^19.2.13",
+    "react-devtools-core": "^7.0.1"
   },
   "peerDependencies": {
     "typescript": "^5"
