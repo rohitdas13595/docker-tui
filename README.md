@@ -195,7 +195,72 @@ docker-tui/
 
 ---
 
-## 📦 Building Executables
+## 📦 Installation
+
+### Quick Install (Recommended)
+
+The easiest way to install Docker TUI is using the automated installation scripts:
+
+#### Linux / macOS
+
+```bash
+# Clone the repository
+git clone https://github.com/rohitkd13595/docker-tui.git
+cd docker-tui
+
+# Run the installation script
+./install.sh
+```
+
+The script will:
+
+- ✅ Detect your OS and architecture automatically
+- ✅ Install dependencies
+- ✅ Build the executable
+- ✅ Install to `/usr/local/bin` or `~/.local/bin`
+- ✅ Add to PATH if needed
+
+#### Windows
+
+```powershell
+# Clone the repository
+git clone https://github.com/rohitkd13595/docker-tui.git
+cd docker-tui
+
+# Run the installation script
+.\install.bat
+```
+
+The script will:
+
+- ✅ Install dependencies
+- ✅ Build the executable
+- ✅ Install to `%LOCALAPPDATA%\Programs\docker-tui`
+- ✅ Add to PATH automatically
+
+After installation, simply run:
+
+```bash
+docker-tui
+```
+
+### Uninstall
+
+#### Linux / macOS
+
+```bash
+./uninstall.sh
+```
+
+#### Windows
+
+```powershell
+.\uninstall.bat
+```
+
+---
+
+## 🔨 Building Executables
 
 You can build standalone executables for Linux, Windows, and macOS (Apple Silicon). These binaries do not require Bun or Node.js installed on the target machine.
 
@@ -264,6 +329,7 @@ bun run dev
 
 1.  Ensure Docker is running (`systemctl status docker` or Check Docker Desktop).
 2.  You might need `sudo` permissions, even for the binary:
+
     ````bash
     sudo ./bin/docker-tui-linux
     3.  Or add your user to the docker group (recommended):
