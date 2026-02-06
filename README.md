@@ -10,11 +10,18 @@ A stunning, modern Terminal User Interface for monitoring and managing Docker co
 ## 🌟 Features
 
 - **Visual Appeal**: Beautiful gradients and big text headers using `ink-gradient` and `ink-big-text`.
+- **Theme Support**: Toggle between Dark and Light modes with the `t` key for optimal viewing in any terminal.
 - **Live Monitoring**: Real-time streaming of CPU, Memory, and Network I/O using Docker streams.
+- **Multi-Resource Management**:
+  - **Containers**: View, start, stop, restart, and monitor containers
+  - **Images**: Browse and delete Docker images
+  - **Volumes**: Inspect and remove Docker volumes
+  - **Networks**: View and manage Docker networks
 - **Container Control**: Start, Stop, and Restart containers directly from the UI.
 - **Live Logs**: View real-time log streams for any container.
+- **Search & Filter**: Press `/` to search and filter containers by name, ID, or image.
 - **Keyboard Navigation**: Intuitive Up/Down arrow navigation and Vim-style keys support.
-- **Smart Pagination**: Automatically paginates long lists of containers (10 per page), preventing terminal scroll jumping.
+- **Smart Pagination**: Automatically paginates long lists (10 per page), preventing terminal scroll jumping.
 - **Instant Feedback**: Live status indicators (Running/Exited) with color-coded feedback.
 - **Performance**: Built on Bun for ultra-fast startup and execution.
 - **Portable**: Single-file executables for Linux, Windows, and macOS.
@@ -109,17 +116,48 @@ stateDiagram-v2
 
 ## 🎮 Key Bindings
 
+### Navigation
+
 | Key                       | Context         | Action                             |
 | :------------------------ | :-------------- | :--------------------------------- |
 | `↑` / `Up Arrow`          | List View       | Move selection up                  |
 | `↓` / `Down Arrow`        | List View       | Move selection down                |
-| `Enter` / `Return`        | List View       | View details of selected container |
+| `Enter` / `Return`        | Container List  | View details of selected container |
 | `Esc` / `q` / `Backspace` | Detail/Log View | Go Back / Return to List View      |
-| `s`                       | Detail View     | **Start** Container                |
-| `x`                       | Detail View     | **Stop** Container                 |
-| `r`                       | Detail View     | **Restart** Container              |
-| `l`                       | Detail View     | View **Logs**                      |
-| `Ctrl+C`                  | Global          | Exit Application                   |
+
+### Tab Switching
+
+| Key   | Action                        |
+| :---- | :---------------------------- |
+| `1`   | Switch to **Containers** tab  |
+| `2`   | Switch to **Images** tab      |
+| `3`   | Switch to **Volumes** tab     |
+| `4`   | Switch to **Networks** tab    |
+| `Tab` | Cycle through tabs            |
+| `t`   | Toggle **Theme** (Dark/Light) |
+
+### Container Actions
+
+| Key | Context     | Action                |
+| :-- | :---------- | :-------------------- |
+| `s` | Detail View | **Start** Container   |
+| `x` | Detail View | **Stop** Container    |
+| `r` | Detail View | **Restart** Container |
+| `l` | Detail View | View **Logs**         |
+
+### Resource Management
+
+| Key               | Context                 | Action                       |
+| :---------------- | :---------------------- | :--------------------------- |
+| `x` / `Delete`    | Images/Volumes/Networks | **Remove** selected resource |
+| `/`               | Container List          | **Search/Filter** containers |
+| `Esc` (in search) | Container List          | Clear search filter          |
+
+### Global
+
+| Key      | Action           |
+| :------- | :--------------- |
+| `Ctrl+C` | Exit Application |
 
 ---
 
@@ -131,16 +169,25 @@ docker-tui/
 ├── src/
 │   ├── components/
 │   │   ├── Header.tsx           # App logo and title
-│   │   ├── ContainerList.tsx    # Paginated list of containers
+│   │   ├── ContainerList.tsx    # Paginated list of containers with search
 │   │   ├── ContainerDetails.tsx # Live stats view + Actions
-│   │   └── ContainerLogs.tsx    # Log streaming view
+│   │   ├── ContainerLogs.tsx    # Log streaming view
+│   │   ├── ImageList.tsx        # Docker images browser
+│   │   ├── VolumeList.tsx       # Docker volumes inspector
+│   │   └── NetworkList.tsx      # Docker networks viewer
 │   ├── hooks/
 │   │   ├── useDockerContainers.ts # Polling logic for container list
-│   │   ├── useDockerStats.ts      # Streaming logic for stats
+│   │   ├── useDockerStats.ts      # Live stats streaming
 │   │   ├── useContainerActions.ts # Start/Stop/Restart logic
-│   │   └── useDockerLogs.ts       # Log streaming logic
-│   ├── index.tsx                # Entry point
-│   └── App.tsx                  # Main layout & router
+│   │   ├── useDockerLogs.ts       # Log streaming hook
+│   │   ├── useDockerImages.ts     # Images fetching hook
+│   │   ├── useImageActions.ts     # Image removal logic
+│   │   ├── useDockerVolumes.ts    # Volumes fetching hook
+│   │   └── useDockerNetworks.ts   # Networks fetching hook
+│   ├── contexts/
+│   │   └── ThemeContext.tsx       # Dark/Light theme provider
+│   ├── App.tsx          # Main application logic
+│   └── index.tsx        # Entry point
 ├── package.json
 ├── tsconfig.json
 └── README.md
@@ -217,24 +264,11 @@ bun run dev
 
 1.  Ensure Docker is running (`systemctl status docker` or Check Docker Desktop).
 2.  You might need `sudo` permissions, even for the binary:
-    ```bash
+    ````bash
     sudo ./bin/docker-tui-linux
-    ```
-3.  Or add your user to the docker group (recommended):
+    3.  Or add your user to the docker group (recommended):
     ```bash
     sudo usermod -aG docker $USER
     # Log out and log back in for this to take effect
-    ```
 
----
-
-## 🔮 Future Roadmap
-
-- [ ] **Image Management**: List, pull, and delete Docker images.
-- [ ] **Volume Inspector**: View volume mounting details.
-- [ ] **Dark/Light Mode**: Toggle color themes.
-- [ ] **Search/Filter**: Filter containers by name.
-
----
-
-Built with ❤️ by **Rohit** using **Bun**.
+    ````

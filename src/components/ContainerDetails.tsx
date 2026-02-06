@@ -2,6 +2,7 @@ import React, { useMemo } from "react";
 import { Box, Text, useInput } from "ink";
 import { useDockerStats, type ContainerStats } from "../hooks/useDockerStats";
 import { useContainerActions } from "../hooks/useContainerActions";
+import { useTheme } from "../contexts/ThemeContext";
 
 interface ContainerDetailsProps {
   containerId: string;
@@ -43,15 +44,16 @@ const ContainerDetails: React.FC<ContainerDetailsProps> = ({
   onBack,
   onViewLogs,
 }) => {
-  const stats = useDockerStats(containerId);
+  const { stats, isLoading, error } = useDockerStats(containerId);
   const {
     startContainer,
     stopContainer,
     restartContainer,
-    isLoading,
+    isLoading: isActionLoading,
     actionMessage,
     actionError,
   } = useContainerActions(containerId);
+  const { colors } = useTheme();
 
   useInput((input, key) => {
     if (key.escape || key.backspace || input === "q") {
@@ -71,22 +73,18 @@ const ContainerDetails: React.FC<ContainerDetailsProps> = ({
     }
   });
 
-  if (!stats) {
-    return <Text>Loading stats for {containerId}...</Text>;
-  }
+  // The following calculations are based on the original structure.
+  // If useDockerStats is updated to return pre-formatted stats, these might become redundant.
+  const cpuPercent = stats ? calculateCpuPercent(stats) : "0.00";
+  const memUsage = stats ? formatBytes(stats.memory_stats.usage) : "0 B";
+  const memLimit = stats ? formatBytes(stats.memory_stats.limit) : "0 B";
+  const memPercent = stats
+    ? ((stats.memory_stats.usage / stats.memory_stats.limit) * 100).toFixed(2)
+    : "0.00";
 
-  const cpuPercent = calculateCpuPercent(stats);
-  const memUsage = formatBytes(stats.memory_stats.usage);
-  const memLimit = formatBytes(stats.memory_stats.limit);
-  const memPercent = (
-    (stats.memory_stats.usage / stats.memory_stats.limit) *
-    100
-  ).toFixed(2);
-
-  // Network I/O
   let rx = 0;
   let tx = 0;
-  if (stats.networks) {
+  if (stats && stats.networks) {
     Object.values(stats.networks).forEach((nw) => {
       rx += nw.rx_bytes;
       tx += nw.tx_bytes;
@@ -97,54 +95,71 @@ const ContainerDetails: React.FC<ContainerDetailsProps> = ({
     <Box
       flexDirection="column"
       borderStyle="double"
-      borderColor="magenta"
+      borderColor={colors.border}
       padding={1}
     >
       <Box marginBottom={1}>
-        <Text bold underline>
+        <Text bold underline color={colors.text}>
           Live Stats for {containerId.substring(0, 12)}
         </Text>
       </Box>
 
-      <Box flexDirection="row" justifyContent="space-between" width="60%">
-        <Box flexDirection="column" marginRight={2}>
-          <Text color="cyan">CPU Usage:</Text>
-          <Text bold>{cpuPercent}%</Text>
-        </Box>
-        <Box flexDirection="column" marginRight={2}>
-          <Text color="green">Memory Usage:</Text>
-          <Text bold>
-            {memUsage} / {memLimit} ({memPercent}%)
+      {error && <Text color={colors.error}>Error: {error.message}</Text>}
+
+      <Box flexDirection="column" marginBottom={1}>
+        {stats ? (
+          <>
+            <Box flexDirection="row" justifyContent="space-between">
+              <Box width="50%">
+                <Text color={colors.text}>CPU Usage: {cpuPercent}%</Text>
+              </Box>
+              <Box width="50%">
+                <Text color={colors.text}>
+                  Memory Usage: {memUsage} / {memLimit} ({memPercent}%)
+                </Text>
+              </Box>
+            </Box>
+            <Box marginTop={1}>
+              <Text color={colors.text}>
+                Network I/O: RX: {formatBytes(rx)} / TX: {formatBytes(tx)}
+              </Text>
+            </Box>
+          </>
+        ) : (
+          <Text color={colors.textSecondary}>
+            {isLoading ? "Loading stats..." : "Waiting for stats..."}
+          </Text>
+        )}
+      </Box>
+
+      <Box
+        borderStyle="single"
+        borderColor={colors.highlight}
+        padding={1}
+        flexDirection="column"
+      >
+        <Box flexDirection="row" justifyContent="space-around">
+          <Text color={colors.text}>
+            Actions: [S]tart | [X]Stop | [R]estart | [L]ogs
           </Text>
         </Box>
-      </Box>
-
-      <Box marginTop={1}>
-        <Text color="yellow">Network I/O:</Text>
-        <Text>
-          {" "}
-          RX: {formatBytes(rx)} / TX: {formatBytes(tx)}
-        </Text>
-      </Box>
-
-      <Box marginTop={1} padding={1} borderStyle="single" borderColor="gray">
-        {isLoading ? (
-          <Text color="yellow">Executing action...</Text>
-        ) : (
-          <>
-            {actionMessage && <Text color="green">{actionMessage}</Text>}
-            {actionError && <Text color="red">{actionError}</Text>}
-            {!actionMessage && !actionError && (
-              <Text color="white">
-                Actions: [S]tart | [X]Stop | [R]estart | [L]ogs
-              </Text>
+        {(actionMessage || actionError || isActionLoading) && (
+          <Box marginTop={1} justifyContent="center">
+            {isActionLoading && (
+              <Text color={colors.warning}>Executing...</Text>
             )}
-          </>
+            {actionMessage && (
+              <Text color={colors.success}>{actionMessage}</Text>
+            )}
+            {actionError && <Text color={colors.error}>{actionError}</Text>}
+          </Box>
         )}
       </Box>
 
       <Box marginTop={1}>
-        <Text color="gray">(Press 'q' or 'Esc' to go back)</Text>
+        <Text color={colors.textSecondary}>
+          (Press 'q' or 'Esc' to go back)
+        </Text>
       </Box>
     </Box>
   );

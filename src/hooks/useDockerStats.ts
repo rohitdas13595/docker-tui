@@ -35,26 +35,30 @@ export interface ContainerStats {
 
 export function useDockerStats(containerId: string | null) {
   const [stats, setStats] = useState<ContainerStats | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
   const streamRef = useRef<any>(null);
 
   useEffect(() => {
     if (!containerId) {
       setStats(null);
+      setIsLoading(false);
       return;
     }
 
-    console.log("Fetching stats for", containerId); // Debugging
-
+    setIsLoading(true);
     const container = docker.getContainer(containerId);
 
     // We use stream: true to get live updates
     container.stats({ stream: true }, (err, stream) => {
       if (err) {
-        console.error("Error getting stats:", err);
+        setError(err instanceof Error ? err : new Error(String(err)));
+        setIsLoading(false);
         return;
       }
 
       streamRef.current = stream;
+      setIsLoading(false);
 
       stream?.on("data", (chunk: Buffer) => {
         try {
@@ -66,18 +70,17 @@ export function useDockerStats(containerId: string | null) {
       });
 
       stream?.on("error", (err: Error) => {
-        console.error("Stream error:", err);
+        setError(err);
       });
     });
 
     return () => {
       if (streamRef.current) {
-        // Try to destroy/close the stream
         streamRef.current.destroy();
         streamRef.current = null;
       }
     };
   }, [containerId]);
 
-  return stats;
+  return { stats, isLoading, error };
 }

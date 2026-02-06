@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from "react";
-import { Box, Text, useInput, useApp } from "ink";
+import React from "react";
+import { Box, Text, useInput } from "ink";
 import { useDockerLogs } from "../hooks/useDockerLogs";
+import { useTheme } from "../contexts/ThemeContext";
 
 interface ContainerLogsProps {
   containerId: string;
@@ -11,56 +12,45 @@ const ContainerLogs: React.FC<ContainerLogsProps> = ({
   containerId,
   onBack,
 }) => {
-  const { logs, error } = useDockerLogs(containerId);
-  const [autoScroll, setAutoScroll] = useState(true);
+  const { logs, isLoading, error } = useDockerLogs(containerId);
+  const { colors } = useTheme();
 
   useInput((input, key) => {
-    if (key.escape || input === "q") {
+    if (input === "q" || key.escape) {
       onBack();
     }
-    // Could implement manual scrolling here later
   });
-
-  // Use a small effect to "stick" to bottom if we were real scrolling div,
-  // but in TUI rendering array, we just render the last N lines naturally.
 
   return (
     <Box
       flexDirection="column"
       borderStyle="single"
-      borderColor="gray"
+      borderColor={colors.border}
       padding={1}
-      flexGrow={1}
+      height={20}
     >
-      <Box marginBottom={1}>
-        <Text bold underline>
-          Logs for {containerId.substring(0, 12)} (Tail 100)
+      <Box
+        marginBottom={1}
+        borderStyle="single"
+        borderColor={colors.textSecondary}
+        paddingX={1}
+      >
+        <Text color={colors.highlight} bold>
+          Logs for {containerId.substring(0, 12)}
         </Text>
       </Box>
 
-      {error && <Text color="red">Error fetching logs: {error.message}</Text>}
-
-      <Box flexDirection="column" flexGrow={1}>
-        {logs.length === 0 && !error && (
-          <Text color="gray">No recent logs or initializing...</Text>
-        )}
-        {logs.map((log, index) => (
-          <Text key={index} wrap="truncate-end">
+      {/* Simple log view - truncated to last Lines */}
+      <Box flexDirection="column">
+        {error && <Text color={colors.error}>{error.message}</Text>}
+        {logs.slice(-15).map((log, i) => (
+          <Text key={i} wrap="truncate-end" color={colors.text}>
             {log}
           </Text>
         ))}
-      </Box>
-
-      <Box
-        marginTop={1}
-        borderStyle="single"
-        borderTop={true}
-        borderBottom={false}
-        borderLeft={false}
-        borderRight={false}
-        borderColor="gray"
-      >
-        <Text color="gray">Press 'q' or 'Esc' to go back.</Text>
+        {logs.length === 0 && !isLoading && !error && (
+          <Text color={colors.textSecondary}>No logs or empty.</Text>
+        )}
       </Box>
     </Box>
   );

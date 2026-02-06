@@ -5,12 +5,18 @@ const docker = new Docker({ socketPath: "/var/run/docker.sock" });
 
 export function useDockerLogs(containerId: string) {
   const [logs, setLogs] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    if (!containerId) return;
+    if (!containerId) {
+      setIsLoading(false);
+      return;
+    }
 
+    setIsLoading(true);
     setLogs([]);
+    setError(null);
     const container = docker.getContainer(containerId);
 
     const streamLogs = async () => {
@@ -22,40 +28,35 @@ export function useDockerLogs(containerId: string) {
           tail: 20,
         });
 
-        stream.on("data", (chunk: Buffer) => {
-          // Docker multiplexing header is 8 bytes.
-          // Byte 0: stream type (0: stdin, 1: stdout, 2: stderr)
-          // Bytes 4-7: payload length
-          // We can just convert to string for simple TUI, removing some binary headers ideally,
-          // but raw string usually contains the text mixed with headers.
-          // For a robust TUI, we strip the header.
+        setIsLoading(false);
 
+        stream.on("data", (chunk: Buffer) => {
           let offset = 0;
           while (offset < chunk.length) {
-            // const type = chunk[offset]; // 1 = stdout, 2 = stderr
+            if (offset + 8 > chunk.length) break;
             const length = chunk.readUInt32BE(offset + 4);
+            if (offset + 8 + length > chunk.length) break;
+
             const payload = chunk.subarray(offset + 8, offset + 8 + length);
             const text = payload.toString("utf-8");
 
-            // Split by lines to array
-            const lines = text.split("\n").filter(Boolean); // filter empty lines
-            setLogs((prev) => [...prev, ...lines].slice(-100)); // Keep last 100 lines
+            const lines = text.split("\n").filter(Boolean);
+            setLogs((prev) => [...prev, ...lines].slice(-100));
 
             offset += 8 + length;
           }
         });
 
-        return () => {
-          // Cleanup usually implies destroying stream, but dockerode Node streams manual destroy
-          // stream.destroy();
-        };
+        // Return stream destroyer if possible, but dockerode type on stream varies.
+        // Assuming stream is readable.
       } catch (err) {
         setError(err as Error);
+        setIsLoading(false);
       }
     };
 
     streamLogs();
   }, [containerId]);
 
-  return { logs, error };
+  return { logs, isLoading, error };
 }

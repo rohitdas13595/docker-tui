@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Box, Text, useInput } from "ink";
 import Docker from "dockerode";
+import { useTheme } from "../contexts/ThemeContext";
 
 interface ContainerListProps {
   containers: Docker.ContainerInfo[];
@@ -13,22 +14,72 @@ const ContainerList: React.FC<ContainerListProps> = ({
   containers,
   onSelect,
 }) => {
+  const { colors } = useTheme();
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [offset, setOffset] = useState(0);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
 
-  // Handle list changes (e.g. items removed)
+  // Filter containers based on search query
+  const filteredContainers = React.useMemo(() => {
+    if (!searchQuery) return containers;
+    const lowerQuery = searchQuery.toLowerCase();
+    return containers.filter(
+      (c) =>
+        c.Names[0]?.toLowerCase().includes(lowerQuery) ||
+        c.Id.toLowerCase().includes(lowerQuery) ||
+        c.Image.toLowerCase().includes(lowerQuery),
+    );
+  }, [containers, searchQuery]);
+
+  // Adjust selection and offset if filtered list changes
   React.useEffect(() => {
-    if (selectedIndex >= containers.length && containers.length > 0) {
-      const newIndex = Math.max(0, containers.length - 1);
-      setSelectedIndex(newIndex);
-      // Adjust offset if needed
-      if (newIndex < offset) {
-        setOffset(newIndex);
-      }
+    if (filteredContainers.length === 0) {
+      setSelectedIndex(0);
+      setOffset(0);
+      return;
     }
-  }, [containers.length, selectedIndex, offset]);
+
+    // Ensure selected index is valid
+    if (selectedIndex >= filteredContainers.length) {
+      setSelectedIndex(filteredContainers.length - 1);
+    }
+
+    // Ensure offset is valid for the new list size
+    // If the list shrank significantly, we might need to reduce offset
+    if (offset >= filteredContainers.length) {
+      setOffset(Math.max(0, filteredContainers.length - LIMIT));
+    }
+  }, [filteredContainers.length, selectedIndex, offset]);
 
   useInput((input, key) => {
+    if (isSearching) {
+      if (key.return) {
+        setIsSearching(false);
+        return;
+      }
+      if (key.escape) {
+        setIsSearching(false);
+        setSearchQuery(""); // Optional: clear on escape? Standard is usually clear.
+        return;
+      }
+      if (key.backspace || key.delete) {
+        setSearchQuery((prev) => prev.slice(0, -1));
+        return;
+      }
+      // Add characters to search query
+      if (input && input.length === 1 && !key.ctrl && !key.meta) {
+        setSearchQuery((prev) => prev + input);
+      }
+      return;
+    }
+
+    // Navigation Mode
+    if (input === "/" && !isSearching) {
+      setIsSearching(true);
+      return;
+    }
+
     if (key.upArrow) {
       setSelectedIndex((prev) => {
         const newIndex = Math.max(0, prev - 1);
@@ -40,7 +91,7 @@ const ContainerList: React.FC<ContainerListProps> = ({
     }
     if (key.downArrow) {
       setSelectedIndex((prev) => {
-        const newIndex = Math.min(containers.length - 1, prev + 1);
+        const newIndex = Math.min(filteredContainers.length - 1, prev + 1);
         if (newIndex >= offset + LIMIT) {
           setOffset(newIndex - LIMIT + 1);
         }
@@ -48,94 +99,128 @@ const ContainerList: React.FC<ContainerListProps> = ({
       });
     }
     if (key.return) {
-      if (containers[selectedIndex]) {
-        onSelect(containers[selectedIndex].Id);
+      if (filteredContainers[selectedIndex]) {
+        onSelect(filteredContainers[selectedIndex].Id);
       }
     }
   });
 
-  if (containers.length === 0) {
-    return (
-      <Box borderStyle="round" borderColor="yellow" padding={1}>
-        <Text color="yellow">No containers found.</Text>
-      </Box>
-    );
-  }
-
-  const visibleContainers = containers.slice(offset, offset + LIMIT);
+  const visibleContainers = filteredContainers.slice(offset, offset + LIMIT);
 
   return (
     <Box
       flexDirection="column"
       borderStyle="round"
-      borderColor="cyan"
+      borderColor={isSearching ? colors.borderSelected : colors.border}
       padding={1}
     >
-      <Box marginBottom={1}>
-        <Box width="15%">
-          <Text underline color="gray">
-            ID
-          </Text>
-        </Box>
-        <Box width="25%">
-          <Text underline color="gray">
-            Name
-          </Text>
-        </Box>
-        <Box width="25%">
-          <Text underline color="gray">
-            Image
-          </Text>
-        </Box>
-        <Box width="15%">
-          <Text underline color="gray">
-            State
-          </Text>
-        </Box>
-        <Box width="20%">
-          <Text underline color="gray">
-            Status
-          </Text>
+      <Box marginBottom={1} justifyContent="space-between">
+        <Box>
+          <Box width="15%">
+            <Text underline color={colors.textSecondary}>
+              ID
+            </Text>
+          </Box>
+          <Box width="25%">
+            <Text underline color={colors.textSecondary}>
+              Name
+            </Text>
+          </Box>
+          <Box width="25%">
+            <Text underline color={colors.textSecondary}>
+              Image
+            </Text>
+          </Box>
+          <Box width="15%">
+            <Text underline color={colors.textSecondary}>
+              State
+            </Text>
+          </Box>
+          <Box width="20%">
+            <Text underline color={colors.textSecondary}>
+              Status
+            </Text>
+          </Box>
         </Box>
       </Box>
-      {visibleContainers.map((container, index) => {
-        const actualIndex = offset + index;
-        const isSelected = actualIndex === selectedIndex;
-        const stateColor = container.State === "running" ? "green" : "red";
-        const name = container.Names[0]?.replace("/", "") || "Unknown";
 
-        return (
-          <Box key={container.Id}>
-            <Box width="15%">
-              <Text color={isSelected ? "blue" : "white"} bold={isSelected}>
-                {isSelected ? "> " : "  "}
-                {container.Id.substring(0, 8)}
+      {visibleContainers.length === 0 ? (
+        <Box padding={1}>
+          <Text color={colors.warning}>
+            No containers match "{searchQuery}"
+          </Text>
+        </Box>
+      ) : (
+        visibleContainers.map((container, index) => {
+          const actualIndex = offset + index;
+          const isSelected = actualIndex === selectedIndex;
+          const stateColor = container.State === "running" ? "green" : "red";
+          const name = container.Names[0]?.replace("/", "") || "Unknown";
+
+          return (
+            <Box key={container.Id}>
+              <Box width="15%">
+                <Text
+                  color={isSelected ? colors.highlight : colors.text}
+                  bold={isSelected}
+                >
+                  {isSelected ? "> " : "  "}
+                  {container.Id.substring(0, 8)}
+                </Text>
+              </Box>
+              <Box width="25%">
+                <Text
+                  color={isSelected ? colors.highlight : colors.text}
+                  bold={isSelected}
+                >
+                  {name}
+                </Text>
+              </Box>
+              <Box width="25%">
+                <Text
+                  color={isSelected ? colors.highlight : colors.text}
+                  wrap="truncate-end"
+                >
+                  {container.Image}
+                </Text>
+              </Box>
+              <Box width="15%">
+                <Text color={stateColor}>{container.State}</Text>
+              </Box>
+              <Box width="20%">
+                <Text color={colors.text} wrap="truncate-end">
+                  {container.Status}
+                </Text>
+              </Box>
+            </Box>
+          );
+        })
+      )}
+
+      <Box marginTop={1} justifyContent="space-between">
+        <Box>
+          <Text color={colors.textSecondary}>
+            Showing {filteredContainers.length > 0 ? offset + 1 : 0}-
+            {Math.min(offset + LIMIT, filteredContainers.length)} of{" "}
+            {filteredContainers.length}
+          </Text>
+        </Box>
+        <Box>
+          {isSearching ? (
+            <Text>
+              Search:{" "}
+              <Text color={colors.borderSelected} bold>
+                {searchQuery}_
               </Text>
-            </Box>
-            <Box width="25%">
-              <Text color={isSelected ? "blue" : "white"} bold={isSelected}>
-                {name}
-              </Text>
-            </Box>
-            <Box width="25%">
-              <Text color={isSelected ? "blue" : "white"} wrap="truncate-end">
-                {container.Image}
-              </Text>
-            </Box>
-            <Box width="15%">
-              <Text color={stateColor}>{container.State}</Text>
-            </Box>
-            <Box width="20%">
-              <Text wrap="truncate-end">{container.Status}</Text>
-            </Box>
-          </Box>
-        );
-      })}
-      <Box marginTop={1} justifyContent="center">
-        <Text color="gray">
-          Showing {offset + 1}-{Math.min(offset + LIMIT, containers.length)} of{" "}
-          {containers.length}
-        </Text>
+            </Text>
+          ) : (
+            <Text color={colors.textSecondary}>
+              {searchQuery
+                ? `Filter: ${searchQuery} (press / to edit, Esc clear)`
+                : "Press '/' to search"}
+            </Text>
+          )}
+        </Box>
       </Box>
     </Box>
   );
